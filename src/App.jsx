@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef } from 'react';
 import './App.css';
 
 function App() {
@@ -14,182 +14,146 @@ function App() {
   const recognitionRef = useRef(null);
   const accumulatedTextRef = useRef('');
 
-  const DEEPSEEK_API_KEY = "sk-428130307ade4e22bd2b44db21124da7";
-
   // ============================================
-  // TRANSLATION FUNCTIONS (Para sa BOTH languages)
+  // TRANSLATION FUNCTIONS
   // ============================================
   
   const translateToSpanish = async (text) => {
     if (!text || text.trim() === '') return '';
     
-    try {
-      const response = await fetch('https://libretranslate.com/translate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          q: text,
-          source: 'tl',
-          target: 'es',
-          format: 'text'
-        })
-      });
-      
-      if (response.ok) {
-        const data = await response.json();
-        if (data && data.translatedText) {
-          return data.translatedText;
-        }
+    // Dictionary for common Tagalog words to Spanish
+    const dict = {
+      'kamusta': 'cómo estás',
+      'kumusta': 'cómo estás',
+      'musta': 'cómo estás',
+      'salamat': 'gracias',
+      'maraming salamat': 'muchas gracias',
+      'paalam': 'adiós',
+      'bye': 'adiós',
+      'mahal': 'amor',
+      'mahal kita': 'te quiero',
+      'gusto kita': 'me gustas',
+      'kape': 'café',
+      'tubig': 'agua',
+      'kanin': 'arroz',
+      'kain': 'comer',
+      'kumain': 'comer',
+      'tulog': 'dormir',
+      'lakad': 'caminar',
+      'takbo': 'correr',
+      'masaya': 'feliz',
+      'malungkot': 'triste',
+      'galit': 'enojado',
+      'pagod': 'cansado',
+      'gutom': 'hambre',
+      'uhaw': 'sed',
+      'ako': 'yo',
+      'ikaw': 'tú',
+      'ka': 'tú',
+      'siya': 'él/ella',
+      'tayo': 'nosotros',
+      'kayo': 'ustedes',
+      'sila': 'ellos',
+      'ano': 'qué',
+      'sino': 'quién',
+      'saan': 'dónde',
+      'bakit': 'por qué',
+      'paano': 'cómo',
+      'kailan': 'cuándo',
+      'magkano': 'cuánto cuesta',
+      'bahay': 'casa',
+      'eskwela': 'escuela',
+      'trabaho': 'trabajo',
+      'simbahan': 'iglesia',
+      'ospital': 'hospital',
+      'palengke': 'mercado',
+      'nanay': 'madre',
+      'tatay': 'padre',
+      'ate': 'hermana mayor',
+      'kuya': 'hermano mayor',
+      'lola': 'abuela',
+      'lolo': 'abuelo',
+    };
+    
+    const lowerText = text.toLowerCase();
+    let result = text;
+    
+    for (const [tagalog, spanish] of Object.entries(dict)) {
+      if (lowerText.includes(tagalog)) {
+        result = result.replace(new RegExp(tagalog, 'gi'), spanish);
       }
-      throw new Error('API failed');
-      
-    } catch (error) {
-      // Fallback dictionary for Spanish
-      const fallback = {
-        'kamusta': 'cómo estás',
-        'kumusta': 'cómo estás',
-        'salamat': 'gracias',
-        'mahal': 'amor',
-        'paalam': 'adiós',
-        'kape': 'café',
-        'tubig': 'agua',
-        'kain': 'comer',
-        'tulog': 'dormir',
-        'masaya': 'feliz',
-        'malungkot': 'triste',
-        'gutom': 'hambre',
-        'ako': 'yo',
-        'ikaw': 'tú',
-        'ka': 'tú',
-        'siya': 'él/ella',
-        'tayo': 'nosotros',
-        'sila': 'ellos',
-      };
-      
-      const lowerText = text.toLowerCase();
-      for (const [key, value] of Object.entries(fallback)) {
-        if (lowerText.includes(key)) {
-          return value;
-        }
-      }
-      return text;
     }
+    
+    return result;
   };
 
   const translateToEnglish = async (text) => {
     if (!text || text.trim() === '') return '';
     
-    try {
-      const response = await fetch('https://libretranslate.com/translate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          q: text,
-          source: 'tl',
-          target: 'en',
-          format: 'text'
-        })
-      });
-      
-      if (response.ok) {
-        const data = await response.json();
-        if (data && data.translatedText) {
-          return data.translatedText;
-        }
+    // Dictionary for common Tagalog words to English
+    const dict = {
+      'kamusta': 'how are you',
+      'kumusta': 'how are you',
+      'musta': 'how are you',
+      'salamat': 'thank you',
+      'maraming salamat': 'thank you very much',
+      'paalam': 'goodbye',
+      'bye': 'goodbye',
+      'mahal': 'love',
+      'mahal kita': 'i love you',
+      'gusto kita': 'i like you',
+      'kape': 'coffee',
+      'tubig': 'water',
+      'kanin': 'rice',
+      'kain': 'eat',
+      'kumain': 'eat',
+      'tulog': 'sleep',
+      'lakad': 'walk',
+      'takbo': 'run',
+      'masaya': 'happy',
+      'malungkot': 'sad',
+      'galit': 'angry',
+      'pagod': 'tired',
+      'gutom': 'hungry',
+      'uhaw': 'thirsty',
+      'ako': 'i',
+      'ikaw': 'you',
+      'ka': 'you',
+      'siya': 'he/she',
+      'tayo': 'we',
+      'kayo': 'you all',
+      'sila': 'they',
+      'ano': 'what',
+      'sino': 'who',
+      'saan': 'where',
+      'bakit': 'why',
+      'paano': 'how',
+      'kailan': 'when',
+      'magkano': 'how much',
+      'bahay': 'house',
+      'eskwela': 'school',
+      'trabaho': 'work',
+      'simbahan': 'church',
+      'ospital': 'hospital',
+      'palengke': 'market',
+      'nanay': 'mother',
+      'tatay': 'father',
+      'ate': 'older sister',
+      'kuya': 'older brother',
+      'lola': 'grandmother',
+      'lolo': 'grandfather',
+    };
+    
+    const lowerText = text.toLowerCase();
+    let result = text;
+    
+    for (const [tagalog, english] of Object.entries(dict)) {
+      if (lowerText.includes(tagalog)) {
+        result = result.replace(new RegExp(tagalog, 'gi'), english);
       }
-      throw new Error('API failed');
-      
-    } catch (error) {
-      // Fallback dictionary for English
-      const fallback = {
-        'kamusta': 'how are you',
-        'kumusta': 'how are you',
-        'salamat': 'thank you',
-        'mahal': 'love',
-        'paalam': 'goodbye',
-        'kape': 'coffee',
-        'tubig': 'water',
-        'kain': 'eat',
-        'tulog': 'sleep',
-        'masaya': 'happy',
-        'malungkot': 'sad',
-        'gutom': 'hungry',
-        'ako': 'i',
-        'ikaw': 'you',
-        'ka': 'you',
-        'siya': 'he/she',
-        'tayo': 'we',
-        'sila': 'they',
-      };
-      
-      const lowerText = text.toLowerCase();
-      for (const [key, value] of Object.entries(fallback)) {
-        if (lowerText.includes(key)) {
-          return value;
-        }
-      }
-      return text;
     }
-  };
-
-  // ============================================
-  // DEEPSEEK AI FUNCTION
-  // ============================================
-  
-  const callDeepSeek = async (message, targetLang) => {
-    try {
-      const languageName = targetLang === 'spanish' ? 'Spanish' : 'English';
-      
-      const response = await fetch('https://api.deepseek.com/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${DEEPSEEK_API_KEY}`
-        },
-        body: JSON.stringify({
-          model: 'deepseek-chat',
-          messages: [
-            {
-              role: 'system',
-              content: `You are a friendly AI assistant. The user speaks Tagalog. You must respond ONLY in ${languageName}. Keep responses short (1-2 sentences). Be natural and engaging.`
-            },
-            {
-              role: 'user',
-              content: `User said in Tagalog: "${message}". Respond in ${languageName} naturally:`
-            }
-          ],
-          max_tokens: 100,
-          temperature: 0.8
-        })
-      });
-      
-      if (!response.ok) throw new Error(`API Error: ${response.status}`);
-      
-      const data = await response.json();
-      if (data.choices && data.choices[0]) {
-        return data.choices[0].message.content;
-      }
-      
-      throw new Error('Invalid response');
-      
-    } catch (error) {
-      console.error('DeepSeek Error:', error);
-      const fallbackResponses = {
-        spanish: [
-          'Lo siento, estoy teniendo problemas técnicos. ¿Puedes repetir?',
-          '¡Interesante! ¿Puedes contarme más?',
-          'Gracias por compartir. ¿Algo más?'
-        ],
-        english: [
-          "Sorry, I'm having technical issues. Can you repeat?",
-          "Interesting! Can you tell me more?",
-          "Thanks for sharing. Anything else?"
-        ]
-      };
-      const fallbackList = fallbackResponses[targetLang];
-      const randomIndex = Math.floor(Math.random() * fallbackList.length);
-      return fallbackList[randomIndex];
-    }
+    
+    return result;
   };
 
   // ============================================
@@ -221,7 +185,6 @@ function App() {
     utterance.onerror = (e) => console.error('Speech error:', e);
     
     window.speechSynthesis.speak(utterance);
-    console.log(`Speaking ${langType}:`, text);
   };
 
   // ============================================
@@ -273,7 +236,7 @@ function App() {
     recognitionRef.current = recognition;
   };
 
-  const stopRecordingAndProcess = async () => {
+  const stopRecordingAndTranslate = async () => {
     if (recognitionRef.current) {
       recognitionRef.current.stop();
       recognitionRef.current = null;
@@ -292,16 +255,12 @@ function App() {
     setUserMessage(finalMessage);
     
     // Translate to BOTH languages
-    const spanishTrans = await translateToSpanish(finalMessage);
-    const englishTrans = await translateToEnglish(finalMessage);
+    const spanish = await translateToSpanish(finalMessage);
+    const english = await translateToEnglish(finalMessage);
     
-    setSpanishTranslation(spanishTrans);
-    setEnglishTranslation(englishTrans);
-    
-    // Get AI response based on selected language
-    const aiResponse = await callDeepSeek(finalMessage, language);
-    setAiReply(aiResponse);
-    
+    setSpanishTranslation(spanish);
+    setEnglishTranslation(english);
+    setAiReply(language === 'spanish' ? spanish : english);
     setShowTranslation(true);
     setIsProcessing(false);
   };
@@ -320,7 +279,7 @@ function App() {
           <div className="badge">DUAL TRANSLATION</div>
         </div>
         
-        <p className="subtitle">Speak Tagalog • See BOTH Spanish & English Translations • AI Response</p>
+        <p className="subtitle">Magsalita ng Tagalog • Makikita ang Spanish at English translation • Pindutin ang speaker para marinig</p>
         
         <div className="language-selector">
           <button className={`lang-btn ${language === 'spanish' ? 'active' : ''}`} onClick={() => setLanguage('spanish')}>
@@ -337,84 +296,92 @@ function App() {
             {isRecording ? 'RECORDING...' : 'START MIC'}
           </button>
           
-          <button className="btn-stop" onClick={stopRecordingAndProcess} disabled={!isRecording || isProcessing}>
+          <button className="btn-stop" onClick={stopRecordingAndTranslate} disabled={!isRecording || isProcessing}>
             <span className="btn-icon">⏹️</span>
             STOP & TRANSLATE
-          </button>
-        </div>
-        
-        <div className="voice-group">
-          <button className="btn-voice" onClick={() => speakText(aiReply, language)} disabled={!aiReply}>
-            <span className="btn-icon">🔊</span>
-            HEAR AI RESPONSE ({language === 'spanish' ? 'SPANISH' : 'ENGLISH'})
-          </button>
-          <button className="btn-voice" onClick={() => speakText(userMessage, 'tagalog')} disabled={!userMessage}>
-            <span className="btn-icon">🗣️</span>
-            REPEAT TAGALOG
           </button>
         </div>
         
         {(isRecording || isProcessing) && (
           <div className="status">
             <div className="status-dot"></div>
-            <span>{isRecording ? 'Recording... Speak clearly' : isProcessing ? 'Translating to Spanish & English...' : ''}</span>
+            <span>{isRecording ? '🔴 Nakikinig... Magsalita ka ng Tagalog' : '🔄 Nagsa-translate...'}</span>
           </div>
         )}
         
         <div className="results">
+          {/* Tagalog Box */}
           <div className="result-card tagalog">
             <div className="result-header">
               <span className="result-icon">🇵🇭</span>
-              <span>📝 Sinabi mo (Tagalog)</span>
+              <span>📝 SINABI MO (TAGALOG)</span>
             </div>
-            <div className="result-content">{userMessage || 'Click START MIC and speak Tagalog...'}</div>
+            <div className="result-content">{userMessage || 'Click START MIC at magsalita ng Tagalog...'}</div>
           </div>
           
+          {/* Spanish Translation Box */}
+          <div className="result-card spanish">
+            <div className="result-header">
+              <span className="result-icon">🇪🇸</span>
+              <span>🌍 SPANISH TRANSLATION</span>
+              <button 
+                className="mini-play" 
+                onClick={() => speakText(spanishTranslation, 'spanish')}
+                disabled={!spanishTranslation}
+              >
+                🔊 HEAR SPANISH
+              </button>
+            </div>
+            <div className="result-content">{spanishTranslation || 'Mag-record muna bago mag-translate...'}</div>
+          </div>
+          
+          {/* English Translation Box */}
+          <div className="result-card english">
+            <div className="result-header">
+              <span className="result-icon">🇺🇸</span>
+              <span>🌍 ENGLISH TRANSLATION</span>
+              <button 
+                className="mini-play" 
+                onClick={() => speakText(englishTranslation, 'english')}
+                disabled={!englishTranslation}
+              >
+                🔊 HEAR ENGLISH
+              </button>
+            </div>
+            <div className="result-content">{englishTranslation || 'Mag-record muna bago mag-translate...'}</div>
+          </div>
+          
+          {/* AI Response Box (Optional) */}
           {showTranslation && (
-            <>
-              <div className="result-card translation spanish fade-in">
-                <div className="result-header">
-                  <span className="result-icon">🇪🇸</span>
-                  <span>🌍 Spanish Translation</span>
-                  <button className="mini-play" onClick={() => speakText(spanishTranslation, 'spanish')}>🔊</button>
-                </div>
-                <div className="result-content">{spanishTranslation || 'Translation failed'}</div>
+            <div className="result-card ai-response fade-in">
+              <div className="result-header">
+                <span className="result-icon">🤖</span>
+                <span>AI RESPONSE ({language === 'spanish' ? 'SPANISH' : 'ENGLISH'})</span>
+                <button 
+                  className="mini-play" 
+                  onClick={() => speakText(aiReply, language)}
+                >
+                  🔊 HEAR AI
+                </button>
               </div>
-              
-              <div className="result-card translation english fade-in">
-                <div className="result-header">
-                  <span className="result-icon">🇺🇸</span>
-                  <span>🌍 English Translation</span>
-                  <button className="mini-play" onClick={() => speakText(englishTranslation, 'english')}>🔊</button>
-                </div>
-                <div className="result-content">{englishTranslation || 'Translation failed'}</div>
-              </div>
-              
-              <div className="result-card ai-response fade-in">
-                <div className="result-header">
-                  <span className="result-icon">🤖</span>
-                  <span>AI Response ({language === 'spanish' ? 'Spanish' : 'English'})</span>
-                  <button className="mini-play" onClick={() => speakText(aiReply, language)}>🔊</button>
-                </div>
-                <div className="result-content">{aiReply}</div>
-              </div>
-            </>
+              <div className="result-content">{aiReply}</div>
+            </div>
           )}
         </div>
         
         <div className="dictionary-preview">
-          <h4>📖 Paano gamitin:</h4>
+          <h4>📖 PAANO GAMITIN:</h4>
           <div className="word-grid">
-            <span>1. I-click ang START MIC</span>
-            <span>2. Magsalita ng TAGALOG (hal: "Kamusta ka?")</span>
-            <span>3. I-click STOP & TRANSLATE</span>
-            <span>4. Makikita mo ang SPANISH at ENGLISH translation!</span>
-            <span>5. Pindutin ang 🔊 para marinig ang translation</span>
+            <span>1️⃣ I-click ang START MIC</span>
+            <span>2️⃣ Magsalita ng TAGALOG (hal: "Kamusta ka?")</span>
+            <span>3️⃣ I-click STOP & TRANSLATE</span>
+            <span>4️⃣ Makikita ang SPANISH at ENGLISH translation</span>
+            <span>5️⃣ Pindutin ang HEAR SPANISH o HEAR ENGLISH para marinig</span>
           </div>
         </div>
         
         <div className="footer">
-          <p>🎤 AI Voice Translator • Tagalog → Spanish & English • Dual Translation • Free</p>
+          <p>🎤 Tagalog → Spanish & English Translator • Voice Recognition • Text-to-Speech • Free</p>
         </div>
       </div>
     </div>
