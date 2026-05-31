@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import './App.css';
 
 function App() {
@@ -7,14 +7,27 @@ function App() {
   const [translatedMessage, setTranslatedMessage] = useState('');
   const [aiReply, setAiReply] = useState('');
   const [isRecording, setIsRecording] = useState(false);
-  const [isSpeaking, setIsSpeaking] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [showTranslation, setShowTranslation] = useState(false);
+  const [voicesLoaded, setVoicesLoaded] = useState(false);
   
   const recognitionRef = useRef(null);
   const accumulatedTextRef = useRef('');
 
   const DEEPSEEK_API_KEY = "sk-428130307ade4e22bd2b44db21124da7";
+
+  // Load voices
+  useEffect(() => {
+    const loadVoices = () => {
+      const voices = window.speechSynthesis.getVoices();
+      if (voices.length > 0) {
+        setVoicesLoaded(true);
+      }
+    };
+    
+    window.speechSynthesis.onvoiceschanged = loadVoices;
+    loadVoices();
+  }, []);
 
   const callDeepSeek = async (message, targetLang) => {
     try {
@@ -43,9 +56,7 @@ function App() {
         })
       });
       
-      if (!response.ok) {
-        throw new Error(`API Error: ${response.status}`);
-      }
+      if (!response.ok) throw new Error(`API Error: ${response.status}`);
       
       const data = await response.json();
       if (data.choices && data.choices[0]) {
@@ -94,75 +105,83 @@ function App() {
     }
   };
 
-  // FIXED SPEECH FUNCTION - Gumagana na ito!
-  const speakText = (text, lang) => {
+  // FIXED: Force Spanish speech
+  const speakSpanish = (text) => {
     if (!text || text.trim() === '') {
       console.log('No text to speak');
       return;
     }
     
-    if (!('speechSynthesis' in window)) {
-      console.error('Speech synthesis not supported');
-      alert('Your browser does not support text-to-speech. Please use Chrome.');
+    // Cancel any ongoing speech
+    window.speechSynthesis.cancel();
+    
+    // Create utterance
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.lang = 'es-ES';
+    utterance.rate = 0.9;
+    utterance.pitch = 1.0;
+    utterance.volume = 1;
+    
+    // Try to find a Spanish voice
+    const voices = window.speechSynthesis.getVoices();
+    const spanishVoice = voices.find(voice => voice.lang === 'es-ES' || voice.lang.startsWith('es'));
+    if (spanishVoice) {
+      utterance.voice = spanishVoice;
+    }
+    
+    utterance.onend = () => console.log('Spanish speech ended');
+    utterance.onerror = (e) => console.error('Spanish speech error:', e);
+    
+    window.speechSynthesis.speak(utterance);
+    console.log('Speaking Spanish:', text);
+  };
+
+  // FIXED: Force English speech
+  const speakEnglish = (text) => {
+    if (!text || text.trim() === '') {
+      console.log('No text to speak');
       return;
     }
     
     // Cancel any ongoing speech
-    if (window.speechSynthesis.speaking) {
-      window.speechSynthesis.cancel();
+    window.speechSynthesis.cancel();
+    
+    // Create utterance
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.lang = 'en-US';
+    utterance.rate = 0.9;
+    utterance.pitch = 1.0;
+    utterance.volume = 1;
+    
+    // Try to find an English voice
+    const voices = window.speechSynthesis.getVoices();
+    const englishVoice = voices.find(voice => voice.lang === 'en-US');
+    if (englishVoice) {
+      utterance.voice = englishVoice;
     }
     
-    setIsSpeaking(true);
+    utterance.onend = () => console.log('English speech ended');
+    utterance.onerror = (e) => console.error('English speech error:', e);
     
-    const speech = new SpeechSynthesisUtterance();
-    speech.text = text;
+    window.speechSynthesis.speak(utterance);
+    console.log('Speaking English:', text);
+  };
+
+  // Tagalog speech
+  const speakTagalog = (text) => {
+    if (!text || text.trim() === '') return;
     
-    // Set language
-    if (lang === 'spanish') {
-      speech.lang = 'es-ES';
-    } else if (lang === 'english') {
-      speech.lang = 'en-US';
-    } else {
-      speech.lang = 'tl-PH';
-    }
+    window.speechSynthesis.cancel();
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.lang = 'tl-PH';
+    utterance.rate = 0.9;
+    utterance.pitch = 1.0;
+    utterance.volume = 1;
     
-    speech.rate = 0.9;
-    speech.pitch = 1.0;
-    speech.volume = 1;
+    utterance.onerror = (e) => console.error('Tagalog speech error:', e);
     
-    // Try to get a better voice
-    const setVoice = () => {
-      const voices = window.speechSynthesis.getVoices();
-      if (voices.length > 0) {
-        if (lang === 'spanish') {
-          const spanishVoice = voices.find(v => v.lang === 'es-ES' || v.lang.startsWith('es'));
-          if (spanishVoice) speech.voice = spanishVoice;
-        } else if (lang === 'english') {
-          const englishVoice = voices.find(v => v.lang === 'en-US');
-          if (englishVoice) speech.voice = englishVoice;
-        }
-      }
-    };
-    
-    // Voices might not be loaded yet
-    if (window.speechSynthesis.getVoices().length > 0) {
-      setVoice();
-    } else {
-      window.speechSynthesis.onvoiceschanged = setVoice;
-    }
-    
-    speech.onend = () => {
-      console.log('Speech ended');
-      setIsSpeaking(false);
-    };
-    
-    speech.onerror = (event) => {
-      console.error('Speech error:', event);
-      setIsSpeaking(false);
-    };
-    
-    window.speechSynthesis.speak(speech);
-    console.log('Speaking:', text, 'in', lang);
+    window.speechSynthesis.speak(utterance);
+    console.log('Speaking Tagalog:', text);
   };
 
   const startRecording = () => {
@@ -276,8 +295,11 @@ function App() {
           <button 
             className="btn-voice" 
             onClick={() => {
-              console.log('Hear button clicked, text:', translatedMessage);
-              speakText(translatedMessage, language);
+              if (language === 'spanish') {
+                speakSpanish(translatedMessage);
+              } else {
+                speakEnglish(translatedMessage);
+              }
             }} 
             disabled={!translatedMessage}
           >
@@ -286,10 +308,7 @@ function App() {
           </button>
           <button 
             className="btn-voice" 
-            onClick={() => {
-              console.log('Repeat button clicked, text:', userMessage);
-              speakText(userMessage, 'tagalog');
-            }} 
+            onClick={() => speakTagalog(userMessage)} 
             disabled={!userMessage}
           >
             <span className="btn-icon">🗣️</span>
@@ -321,7 +340,13 @@ function App() {
                   <span>Translation to {language === 'spanish' ? 'Spanish' : 'English'}</span>
                 </div>
                 <div className="result-content">{translatedMessage}</div>
-                <button className="play-btn" onClick={() => speakText(translatedMessage, language)}>
+                <button className="play-btn" onClick={() => {
+                  if (language === 'spanish') {
+                    speakSpanish(translatedMessage);
+                  } else {
+                    speakEnglish(translatedMessage);
+                  }
+                }}>
                   ▶️ Play Audio
                 </button>
               </div>
@@ -332,7 +357,13 @@ function App() {
                   <span>AI Response (DeepSeek)</span>
                 </div>
                 <div className="result-content">{aiReply}</div>
-                <button className="play-btn" onClick={() => speakText(aiReply, language)}>
+                <button className="play-btn" onClick={() => {
+                  if (language === 'spanish') {
+                    speakSpanish(aiReply);
+                  } else {
+                    speakEnglish(aiReply);
+                  }
+                }}>
                   ▶️ Play AI Voice
                 </button>
               </div>
