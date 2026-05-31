@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState } from 'react';
 import './App.css';
 
 function App() {
@@ -7,153 +7,91 @@ function App() {
   const [aiReply, setAiReply] = useState('');
   const [translatedMessage, setTranslatedMessage] = useState('');
   const [isListening, setIsListening] = useState(false);
-  const [isSpeaking, setIsSpeaking] = useState(false);
   const [isThinking, setIsThinking] = useState(false);
-  const [conversationHistory, setConversationHistory] = useState([]);
-  
-  const recognitionRef = useRef(null);
-  const pressTimerRef = useRef(null);
+  const [isSpeaking, setIsSpeaking] = useState(false);
 
-  const DEEPSEEK_API_KEY = import.meta.env.VITE_DEEPSEEK_API_KEY || "sk-428130307ade4e22bd2b44db21124da7";
-
-  // Translation
+  // Translation gamit ang sarili mong API (sa Vercel)
   const translateText = async (text, targetLang) => {
     try {
-      const response = await fetch(
-        `https://api.mymemory.translated.net/get?q=${encodeURIComponent(text)}&langpair=tl|${targetLang}`
-      );
+      const response = await fetch('/api/translate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          text: text,
+          sourceLang: 'tl',
+          targetLang: targetLang === 'spanish' ? 'es' : 'en'
+        })
+      });
       const data = await response.json();
-      return data.responseData?.translatedText || text;
+      return data.translatedText || text;
     } catch (error) {
       console.error('Translation error:', error);
       return text;
     }
   };
 
-  // DeepSeek AI
-  const getDeepSeekResponse = async (userText, targetLang) => {
+  // AI Response gamit ang sarili mong API (sa Vercel)
+  const getAIResponse = async (userText, targetLang) => {
     try {
-      setIsThinking(true);
-      const languageName = targetLang === 'spanish' ? 'Spanish' : 'English';
-      
-      const response = await fetch('https://api.deepseek.com/v1/chat/completions', {
+      const response = await fetch('/api/chat', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${DEEPSEEK_API_KEY}`
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          model: 'deepseek-chat',
-          messages: [
-            {
-              role: 'system',
-              content: `You are a friendly AI assistant. Respond ONLY in ${languageName}. Keep responses short (1-2 sentences). Be natural and engaging.`
-            },
-            {
-              role: 'user',
-              content: `User said in Tagalog: "${userText}". Respond in ${languageName}:`
-            }
-          ],
-          max_tokens: 100,
-          temperature: 0.8
+          message: userText,
+          language: targetLang
         })
       });
-      
       const data = await response.json();
-      return data.choices?.[0]?.message?.content || "Sorry, I couldn't process that.";
+      return data.reply;
     } catch (error) {
       console.error('AI Error:', error);
       return targetLang === 'spanish' 
         ? "Lo siento, error técnico. ¿Puedes repetir?"
         : "Sorry, technical error. Can you repeat?";
-    } finally {
-      setIsThinking(false);
     }
   };
 
-  // Start recording (pindot nang matagal)
-  const startRecording = () => {
-    // Request microphone permission
-    navigator.mediaDevices.getUserMedia({ audio: true })
-      .then(() => {
-        const SpeechRecognition = window.webkitSpeechRecognition || window.SpeechRecognition;
-        if (!SpeechRecognition) {
-          alert('Voice recognition not supported. Use Chrome browser!');
-          return;
-        }
-        
-        const recognition = new SpeechRecognition();
-        recognition.lang = 'tl-PH';
-        recognition.continuous = true; // Para tuloy-tuloy ang recording
-        recognition.interimResults = true; // Para makita ang sinasabi habang nagsasalita
-        
-        let finalTranscript = '';
-        
-        recognition.onresult = (event) => {
-          // Kunin ang kasalukuyang sinasabi
-          let interimTranscript = '';
-          for (let i = event.resultIndex; i < event.results.length; i++) {
-            const transcript = event.results[i][0].transcript;
-            if (event.results[i].isFinal) {
-              finalTranscript += transcript;
-            } else {
-              interimTranscript += transcript;
-            }
-          }
-          // Ipakita ang kasalukuyang sinasabi (interim)
-          setUserMessage(finalTranscript + interimTranscript);
-        };
-        
-        recognition.onerror = (event) => {
-          console.error('Recognition error:', event.error);
-        };
-        
-        recognition.start();
-        recognitionRef.current = recognition;
-        setIsListening(true);
-        setUserMessage('🎤 Nakikinig...');
-      })
-      .catch(err => {
-        console.error('Mic permission denied:', err);
-        alert('Please allow microphone access!');
-      });
-  };
-
-  // Stop recording at i-process (binitawan ang pindot)
-  const stopRecordingAndProcess = async () => {
-    if (recognitionRef.current) {
-      recognitionRef.current.stop();
-      recognitionRef.current = null;
-    }
-    
-    setIsListening(false);
-    
-    const finalMessage = userMessage.replace('🎤 Nakikinig...', '').trim();
-    if (!finalMessage) {
-      setUserMessage('Walang narinig. Pindutin nang matagal ang mic at magsalita.');
+  const startListening = () => {
+    if (!('webkitSpeechRecognition' in window)) {
+      alert('Sorry, hindi supported ng browser mo. Gumamit ng Chrome!');
       return;
     }
     
-    setUserMessage(finalMessage);
+    setIsListening(true);
+    const recognition = new window.webkitSpeechRecognition();
+    recognition.lang = 'tl-PH';
+    recognition.continuous = false;
+    recognition.interimResults = false;
     
-    // Process the recorded message
-    const targetLang = language === 'spanish' ? 'es' : 'en';
-    const translated = await translateText(finalMessage, targetLang);
-    setTranslatedMessage(translated);
+    recognition.onresult = async (event) => {
+      const tagalogText = event.results[0][0].transcript;
+      setUserMessage(tagalogText);
+      setIsListening(false);
+      setIsThinking(true);
+      
+      const targetLang = language === 'spanish' ? 'es' : 'en';
+      
+      // Translate gamit ang sariling API
+      const translated = await translateText(tagalogText, language);
+      setTranslatedMessage(translated);
+      
+      // AI response gamit ang sariling API
+      const aiResponse = await getAIResponse(tagalogText, language);
+      setAiReply(aiResponse);
+      setIsThinking(false);
+      
+      speakText(aiResponse, language);
+    };
     
-    const aiResponse = await getDeepSeekResponse(finalMessage, language);
-    setAiReply(aiResponse);
+    recognition.onerror = (event) => {
+      console.error('Error:', event.error);
+      setIsListening(false);
+      alert('May error sa microphone. Payagan ang mic access sa browser!');
+    };
     
-    setConversationHistory(prev => [
-      ...prev,
-      { role: 'user', content: finalMessage },
-      { role: 'assistant', content: aiResponse }
-    ]);
-    
-    speakText(aiResponse, language);
+    recognition.start();
   };
-
-  // Text to Speech
+  
   const speakText = (text, lang) => {
     if (!('speechSynthesis' in window)) return;
     
@@ -172,13 +110,19 @@ function App() {
     <div className="App">
       <div className="container">
         <h1>🎙️ AI Voice Translator</h1>
-        <p className="subtitle">Pindutin nang matagal ang mic → Magsalita ng Tagalog → Bitawan para isalin at sumagot ang AI</p>
+        <p className="subtitle">Magsalita ng Tagalog, sasagot ang AI sa Spanish o English - WALANG LIMIT!</p>
         
         <div className="language-selector">
-          <button className={language === 'spanish' ? 'active' : ''} onClick={() => setLanguage('spanish')}>
+          <button 
+            className={language === 'spanish' ? 'active' : ''}
+            onClick={() => setLanguage('spanish')}
+          >
             🇪🇸 Spanish
           </button>
-          <button className={language === 'english' ? 'active' : ''} onClick={() => setLanguage('english')}>
+          <button 
+            className={language === 'english' ? 'active' : ''}
+            onClick={() => setLanguage('english')}
+          >
             🇺🇸 English
           </button>
         </div>
@@ -186,15 +130,11 @@ function App() {
         <div className="mic-container">
           <button 
             className={`mic-button ${isListening ? 'listening' : ''}`}
-            onMouseDown={startRecording}
-            onMouseUp={stopRecordingAndProcess}
-            onTouchStart={startRecording}
-            onTouchEnd={stopRecordingAndProcess}
-            disabled={isThinking}
+            onClick={startListening}
+            disabled={isListening || isThinking}
           >
-            {isListening ? '🔴 Nagsasalita ka... (bitawan para isalin)' : isThinking ? '🤖 Nag-iisip ang AI...' : '🎤 PINDUTIN nang matagal at magsalita'}
+            {isListening ? '🔴 Nakikinig...' : isThinking ? '🤔 Nag-iisip ang AI...' : '🎤 Magsalita (Tagalog)'}
           </button>
-          <p className="mic-hint">💡 Pindutin at hold → Magsalita ng Tagalog → Bitawan</p>
         </div>
         
         <div className="messages">
@@ -204,26 +144,29 @@ function App() {
           </div>
           
           <div className="message-card translated">
-            <div className="message-label">🌍 Isinalin sa {language === 'spanish' ? 'Spanish' : 'English'}:</div>
+            <div className="message-label">
+              🌍 Isinalin sa {language === 'spanish' ? 'Spanish' : 'English'}:
+            </div>
             <div className="message-text">{translatedMessage || 'Wala pa...'}</div>
           </div>
           
           <div className="message-card ai">
-            <div className="message-label">🤖 Sagot ng AI {isSpeaking && '(nagsasalita...)'}:</div>
-            <div className="message-text">{aiReply || 'Pindutin nang matagal ang mic para magsimula'}</div>
+            <div className="message-label">
+              🤖 Sagot ng AI {isSpeaking && '(nagsasalita...)'}:
+            </div>
+            <div className="message-text">{aiReply || 'I-click ang mic para magsimula'}</div>
           </div>
         </div>
         
         <div className="instructions">
-          <h3>📖 Paano gamitin (Hold to Talk):</h3>
+          <h3>📖 Paano gamitin:</h3>
           <ol>
             <li>Piliin kung Spanish o English</li>
-            <li><strong>PINDUTIN nang matagal</strong> ang mic button</li>
-            <li>Magsalita ng <strong>TAGALOG</strong> habang nakapindot</li>
-            <li><strong>BITAWAN</strong> ang button para i-translate at sumagot ang AI</li>
-            <li>Maririnig mo ang sagot ng AI sa napili mong wika!</li>
+            <li>I-click ang mic button at magsalita ng <strong>TAGALOG</strong></li>
+            <li><strong>WALANG LIMIT ANG USAPAN!</strong> DeepSeek AI + LibreTranslate</li>
+            <li>Sasagot ang AI sa napili mong wika - may boses pa!</li>
           </ol>
-          <p className="note">🎤 Tulad ito ng walkie-talkie: pindot para magsalita, bitaw para mag-translate!</p>
+          <p className="note">🎤 Libre ito at walang limit sa translation at AI responses!</p>
         </div>
       </div>
     </div>
