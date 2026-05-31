@@ -67,11 +67,15 @@ h1 {
 .mic-container {
   text-align: center;
   margin-bottom: 30px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
 }
 
 .mic-button {
   padding: 20px 40px;
-  font-size: 20px;
+  font-size: 18px;
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   color: white;
   border: none;
@@ -79,11 +83,18 @@ h1 {
   cursor: pointer;
   transition: all 0.3s;
   box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+  min-width: 280px;
+  font-weight: bold;
+  letter-spacing: 1px;
 }
 
 .mic-button:hover:not(:disabled) {
   transform: scale(1.05);
   box-shadow: 0 8px 25px rgba(0,0,0,0.3);
+}
+
+.mic-button:active {
+  transform: scale(0.98);
 }
 
 .mic-button.listening {
@@ -94,6 +105,18 @@ h1 {
 .mic-button:disabled {
   opacity: 0.7;
   cursor: not-allowed;
+  background: linear-gradient(135deg, #999 0%, #666 100%);
+  animation: thinking 1s infinite;
+}
+
+.mic-hint {
+  text-align: center;
+  font-size: 13px;
+  color: #888;
+  background: #f0f0f0;
+  display: inline-block;
+  padding: 5px 15px;
+  border-radius: 20px;
 }
 
 @keyframes pulse {
@@ -106,6 +129,12 @@ h1 {
   100% {
     transform: scale(1);
   }
+}
+
+@keyframes thinking {
+  0% { opacity: 0.6; }
+  50% { opacity: 1; }
+  100% { opacity: 0.6; }
 }
 
 .messages {
@@ -200,9 +229,18 @@ h1 {
   .mic-button {
     padding: 15px 30px;
     font-size: 16px;
+    min-width: 240px;
   }
   
   .message-text {
     font-size: 16px;
+  }
+  
+  .mic-hint {
+    font-size: 11px;
+  }
+  
+  .mic-button:active {
+    transform: scale(0.96);
   }
 }
