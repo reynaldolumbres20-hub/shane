@@ -14,13 +14,8 @@ function App() {
   const recognitionRef = useRef(null);
   const accumulatedTextRef = useRef('');
 
-  // DeepSeek API Key (galing sa Vercel Environment Variable)
   const DEEPSEEK_API_KEY = "sk-428130307ade4e22bd2b44db21124da7";
 
-  // ============================================
-  // CALL DEEPSEEK API (walang limit, natural na sagot)
-  // ============================================
-  
   const callDeepSeek = async (message, targetLang) => {
     try {
       const languageName = targetLang === 'spanish' ? 'Spanish' : 'English';
@@ -61,7 +56,6 @@ function App() {
       
     } catch (error) {
       console.error('DeepSeek Error:', error);
-      // Fallback responses kung offline si DeepSeek
       const fallbackResponses = {
         spanish: [
           'Lo siento, estoy teniendo problemas técnicos. ¿Puedes repetir?',
@@ -80,7 +74,6 @@ function App() {
     }
   };
 
-  // Translation using LibreTranslate (libre)
   const translateText = async (text, targetLang) => {
     try {
       const response = await fetch('https://libretranslate.com/translate', {
@@ -101,10 +94,77 @@ function App() {
     }
   };
 
-  // ============================================
-  // VOICE RECOGNITION
-  // ============================================
-  
+  // FIXED SPEECH FUNCTION - Gumagana na ito!
+  const speakText = (text, lang) => {
+    if (!text || text.trim() === '') {
+      console.log('No text to speak');
+      return;
+    }
+    
+    if (!('speechSynthesis' in window)) {
+      console.error('Speech synthesis not supported');
+      alert('Your browser does not support text-to-speech. Please use Chrome.');
+      return;
+    }
+    
+    // Cancel any ongoing speech
+    if (window.speechSynthesis.speaking) {
+      window.speechSynthesis.cancel();
+    }
+    
+    setIsSpeaking(true);
+    
+    const speech = new SpeechSynthesisUtterance();
+    speech.text = text;
+    
+    // Set language
+    if (lang === 'spanish') {
+      speech.lang = 'es-ES';
+    } else if (lang === 'english') {
+      speech.lang = 'en-US';
+    } else {
+      speech.lang = 'tl-PH';
+    }
+    
+    speech.rate = 0.9;
+    speech.pitch = 1.0;
+    speech.volume = 1;
+    
+    // Try to get a better voice
+    const setVoice = () => {
+      const voices = window.speechSynthesis.getVoices();
+      if (voices.length > 0) {
+        if (lang === 'spanish') {
+          const spanishVoice = voices.find(v => v.lang === 'es-ES' || v.lang.startsWith('es'));
+          if (spanishVoice) speech.voice = spanishVoice;
+        } else if (lang === 'english') {
+          const englishVoice = voices.find(v => v.lang === 'en-US');
+          if (englishVoice) speech.voice = englishVoice;
+        }
+      }
+    };
+    
+    // Voices might not be loaded yet
+    if (window.speechSynthesis.getVoices().length > 0) {
+      setVoice();
+    } else {
+      window.speechSynthesis.onvoiceschanged = setVoice;
+    }
+    
+    speech.onend = () => {
+      console.log('Speech ended');
+      setIsSpeaking(false);
+    };
+    
+    speech.onerror = (event) => {
+      console.error('Speech error:', event);
+      setIsSpeaking(false);
+    };
+    
+    window.speechSynthesis.speak(speech);
+    console.log('Speaking:', text, 'in', lang);
+  };
+
   const startRecording = () => {
     if (!('webkitSpeechRecognition' in window)) {
       alert('Please use Google Chrome browser!');
@@ -165,33 +225,14 @@ function App() {
     
     setUserMessage(finalMessage);
     
-    // Translate the message
     const translated = await translateText(finalMessage, language);
     setTranslatedMessage(translated);
     
-    // Get AI response from DeepSeek
     const aiResponse = await callDeepSeek(finalMessage, language);
     setAiReply(aiResponse);
     
     setShowTranslation(true);
     setIsProcessing(false);
-    
-    // Auto-speak the translation
-    speakText(translated, language);
-  };
-
-  const speakText = (text, lang) => {
-    if (!('speechSynthesis' in window) || !text) return;
-    
-    window.speechSynthesis.cancel();
-    setIsSpeaking(true);
-    const speech = new SpeechSynthesisUtterance();
-    speech.text = text;
-    speech.lang = lang === 'spanish' ? 'es-ES' : 'en-US';
-    speech.rate = 0.9;
-    speech.pitch = 1.0;
-    speech.onend = () => setIsSpeaking(false);
-    window.speechSynthesis.speak(speech);
   };
 
   return (
@@ -232,11 +273,25 @@ function App() {
         </div>
         
         <div className="voice-group">
-          <button className="btn-voice" onClick={() => speakText(translatedMessage, language)} disabled={!translatedMessage}>
+          <button 
+            className="btn-voice" 
+            onClick={() => {
+              console.log('Hear button clicked, text:', translatedMessage);
+              speakText(translatedMessage, language);
+            }} 
+            disabled={!translatedMessage}
+          >
             <span className="btn-icon">🔊</span>
             HEAR {language === 'spanish' ? 'SPANISH' : 'ENGLISH'}
           </button>
-          <button className="btn-voice" onClick={() => speakText(userMessage, 'tl-PH')} disabled={!userMessage}>
+          <button 
+            className="btn-voice" 
+            onClick={() => {
+              console.log('Repeat button clicked, text:', userMessage);
+              speakText(userMessage, 'tagalog');
+            }} 
+            disabled={!userMessage}
+          >
             <span className="btn-icon">🗣️</span>
             REPEAT TAGALOG
           </button>
@@ -283,16 +338,6 @@ function App() {
               </div>
             </>
           )}
-        </div>
-        
-        <div className="dictionary-preview">
-          <h4>🤖 Powered by DeepSeek AI</h4>
-          <div className="word-grid">
-            <span>✅ Unlimited conversations</span>
-            <span>✅ Natural responses</span>
-            <span>✅ Understands context</span>
-            <span>✅ Free to use</span>
-          </div>
         </div>
         
         <div className="footer">
