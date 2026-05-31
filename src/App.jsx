@@ -9,26 +9,72 @@ function App() {
   const [isRecording, setIsRecording] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [showTranslation, setShowTranslation] = useState(false);
-  const [voicesLoaded, setVoicesLoaded] = useState(false);
   
   const recognitionRef = useRef(null);
   const accumulatedTextRef = useRef('');
 
   const DEEPSEEK_API_KEY = "sk-428130307ade4e22bd2b44db21124da7";
 
-  // Load voices
-  useEffect(() => {
-    const loadVoices = () => {
-      const voices = window.speechSynthesis.getVoices();
-      if (voices.length > 0) {
-        setVoicesLoaded(true);
-      }
-    };
+  // ============================================
+  // TRANSLATION FUNCTION (LIBRE)
+  // ============================================
+  
+  const translateText = async (text, targetLang) => {
+    if (!text || text.trim() === '') return '';
     
-    window.speechSynthesis.onvoiceschanged = loadVoices;
-    loadVoices();
-  }, []);
+    try {
+      // Try LibreTranslate first
+      const response = await fetch('https://libretranslate.com/translate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          q: text,
+          source: 'tl',
+          target: targetLang === 'spanish' ? 'es' : 'en',
+          format: 'text'
+        })
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        if (data && data.translatedText) {
+          return data.translatedText;
+        }
+      }
+      throw new Error('API failed');
+      
+    } catch (error) {
+      console.error('Translation error, using fallback:', error);
+      // Fallback dictionary
+      const fallbackDict = {
+        'kamusta': targetLang === 'spanish' ? 'cómo estás' : 'how are you',
+        'kumusta': targetLang === 'spanish' ? 'cómo estás' : 'how are you',
+        'salamat': targetLang === 'spanish' ? 'gracias' : 'thank you',
+        'mahal': targetLang === 'spanish' ? 'amor' : 'love',
+        'paalam': targetLang === 'spanish' ? 'adiós' : 'goodbye',
+        'kape': targetLang === 'spanish' ? 'café' : 'coffee',
+        'tubig': targetLang === 'spanish' ? 'agua' : 'water',
+        'kain': targetLang === 'spanish' ? 'comer' : 'eat',
+        'tulog': targetLang === 'spanish' ? 'dormir' : 'sleep',
+        'masaya': targetLang === 'spanish' ? 'feliz' : 'happy',
+        'malungkot': targetLang === 'spanish' ? 'triste' : 'sad',
+        'gutom': targetLang === 'spanish' ? 'hambre' : 'hungry',
+      };
+      
+      const lowerText = text.toLowerCase();
+      for (const [key, value] of Object.entries(fallbackDict)) {
+        if (lowerText.includes(key)) {
+          return value;
+        }
+      }
+      return text;
+    }
+  };
 
+  // ============================================
+  // DEEPSEEK AI FUNCTION
+  // ============================================
+  
   const callDeepSeek = async (message, targetLang) => {
     try {
       const languageName = targetLang === 'spanish' ? 'Spanish' : 'English';
@@ -85,105 +131,42 @@ function App() {
     }
   };
 
-  const translateText = async (text, targetLang) => {
-    try {
-      const response = await fetch('https://libretranslate.com/translate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          q: text,
-          source: 'tl',
-          target: targetLang === 'spanish' ? 'es' : 'en',
-          format: 'text'
-        })
-      });
-      const data = await response.json();
-      return data.translatedText || text;
-    } catch (error) {
-      console.error('Translation error:', error);
-      return text;
-    }
-  };
-
-  // FIXED: Force Spanish speech
-  const speakSpanish = (text) => {
+  // ============================================
+  // SPEECH FUNCTIONS
+  // ============================================
+  
+  const speakText = (text, langType) => {
     if (!text || text.trim() === '') {
       console.log('No text to speak');
       return;
     }
     
-    // Cancel any ongoing speech
     window.speechSynthesis.cancel();
     
-    // Create utterance
     const utterance = new SpeechSynthesisUtterance(text);
-    utterance.lang = 'es-ES';
+    
+    if (langType === 'spanish') {
+      utterance.lang = 'es-ES';
+    } else if (langType === 'english') {
+      utterance.lang = 'en-US';
+    } else {
+      utterance.lang = 'tl-PH';
+    }
+    
     utterance.rate = 0.9;
     utterance.pitch = 1.0;
     utterance.volume = 1;
     
-    // Try to find a Spanish voice
-    const voices = window.speechSynthesis.getVoices();
-    const spanishVoice = voices.find(voice => voice.lang === 'es-ES' || voice.lang.startsWith('es'));
-    if (spanishVoice) {
-      utterance.voice = spanishVoice;
-    }
-    
-    utterance.onend = () => console.log('Spanish speech ended');
-    utterance.onerror = (e) => console.error('Spanish speech error:', e);
+    utterance.onerror = (e) => console.error('Speech error:', e);
     
     window.speechSynthesis.speak(utterance);
-    console.log('Speaking Spanish:', text);
+    console.log(`Speaking ${langType}:`, text);
   };
 
-  // FIXED: Force English speech
-  const speakEnglish = (text) => {
-    if (!text || text.trim() === '') {
-      console.log('No text to speak');
-      return;
-    }
-    
-    // Cancel any ongoing speech
-    window.speechSynthesis.cancel();
-    
-    // Create utterance
-    const utterance = new SpeechSynthesisUtterance(text);
-    utterance.lang = 'en-US';
-    utterance.rate = 0.9;
-    utterance.pitch = 1.0;
-    utterance.volume = 1;
-    
-    // Try to find an English voice
-    const voices = window.speechSynthesis.getVoices();
-    const englishVoice = voices.find(voice => voice.lang === 'en-US');
-    if (englishVoice) {
-      utterance.voice = englishVoice;
-    }
-    
-    utterance.onend = () => console.log('English speech ended');
-    utterance.onerror = (e) => console.error('English speech error:', e);
-    
-    window.speechSynthesis.speak(utterance);
-    console.log('Speaking English:', text);
-  };
-
-  // Tagalog speech
-  const speakTagalog = (text) => {
-    if (!text || text.trim() === '') return;
-    
-    window.speechSynthesis.cancel();
-    const utterance = new SpeechSynthesisUtterance(text);
-    utterance.lang = 'tl-PH';
-    utterance.rate = 0.9;
-    utterance.pitch = 1.0;
-    utterance.volume = 1;
-    
-    utterance.onerror = (e) => console.error('Tagalog speech error:', e);
-    
-    window.speechSynthesis.speak(utterance);
-    console.log('Speaking Tagalog:', text);
-  };
-
+  // ============================================
+  // VOICE RECOGNITION
+  // ============================================
+  
   const startRecording = () => {
     if (!('webkitSpeechRecognition' in window)) {
       alert('Please use Google Chrome browser!');
@@ -192,6 +175,8 @@ function App() {
     
     accumulatedTextRef.current = '';
     setUserMessage('');
+    setTranslatedMessage('');
+    setAiReply('');
     setShowTranslation(false);
     setIsRecording(true);
     
@@ -244,9 +229,11 @@ function App() {
     
     setUserMessage(finalMessage);
     
+    // Translate the message
     const translated = await translateText(finalMessage, language);
     setTranslatedMessage(translated);
     
+    // Get AI response
     const aiResponse = await callDeepSeek(finalMessage, language);
     setAiReply(aiResponse);
     
@@ -268,7 +255,7 @@ function App() {
           <div className="badge">DEEPSEEK AI</div>
         </div>
         
-        <p className="subtitle">Powered by DeepSeek AI • Unlimited Conversations • Natural Responses</p>
+        <p className="subtitle">Speak Tagalog • Get Translation • AI Response • Voice Output</p>
         
         <div className="language-selector">
           <button className={`lang-btn ${language === 'spanish' ? 'active' : ''}`} onClick={() => setLanguage('spanish')}>
@@ -287,20 +274,14 @@ function App() {
           
           <button className="btn-stop" onClick={stopRecordingAndProcess} disabled={!isRecording || isProcessing}>
             <span className="btn-icon">⏹️</span>
-            STOP & PROCESS
+            STOP & TRANSLATE
           </button>
         </div>
         
         <div className="voice-group">
           <button 
             className="btn-voice" 
-            onClick={() => {
-              if (language === 'spanish') {
-                speakSpanish(translatedMessage);
-              } else {
-                speakEnglish(translatedMessage);
-              }
-            }} 
+            onClick={() => speakText(translatedMessage, language)} 
             disabled={!translatedMessage}
           >
             <span className="btn-icon">🔊</span>
@@ -308,7 +289,7 @@ function App() {
           </button>
           <button 
             className="btn-voice" 
-            onClick={() => speakTagalog(userMessage)} 
+            onClick={() => speakText(userMessage, 'tagalog')} 
             disabled={!userMessage}
           >
             <span className="btn-icon">🗣️</span>
@@ -319,7 +300,7 @@ function App() {
         {(isRecording || isProcessing) && (
           <div className="status">
             <div className="status-dot"></div>
-            <span>{isRecording ? 'Recording... Speak clearly' : isProcessing ? 'Processing with DeepSeek AI...' : ''}</span>
+            <span>{isRecording ? 'Recording... Speak clearly' : isProcessing ? 'Translating & Processing...' : ''}</span>
           </div>
         )}
         
@@ -339,15 +320,9 @@ function App() {
                   <span className="result-icon">{language === 'spanish' ? '🇪🇸' : '🇺🇸'}</span>
                   <span>Translation to {language === 'spanish' ? 'Spanish' : 'English'}</span>
                 </div>
-                <div className="result-content">{translatedMessage}</div>
-                <button className="play-btn" onClick={() => {
-                  if (language === 'spanish') {
-                    speakSpanish(translatedMessage);
-                  } else {
-                    speakEnglish(translatedMessage);
-                  }
-                }}>
-                  ▶️ Play Audio
+                <div className="result-content">{translatedMessage || 'Translation failed'}</div>
+                <button className="play-btn" onClick={() => speakText(translatedMessage, language)}>
+                  ▶️ Play Translation Audio
                 </button>
               </div>
               
@@ -357,13 +332,7 @@ function App() {
                   <span>AI Response (DeepSeek)</span>
                 </div>
                 <div className="result-content">{aiReply}</div>
-                <button className="play-btn" onClick={() => {
-                  if (language === 'spanish') {
-                    speakSpanish(aiReply);
-                  } else {
-                    speakEnglish(aiReply);
-                  }
-                }}>
+                <button className="play-btn" onClick={() => speakText(aiReply, language)}>
                   ▶️ Play AI Voice
                 </button>
               </div>
@@ -371,8 +340,18 @@ function App() {
           )}
         </div>
         
+        <div className="dictionary-preview">
+          <h4>📚 How to use:</h4>
+          <div className="word-grid">
+            <span>1. Click START MIC</span>
+            <span>2. Speak Tagalog</span>
+            <span>3. Click STOP & TRANSLATE</span>
+            <span>4. Click HEAR to listen</span>
+          </div>
+        </div>
+        
         <div className="footer">
-          <p>🎤 AI Voice Translator • Powered by DeepSeek AI • Unlimited & Free</p>
+          <p>🎤 AI Voice Translator • Translation + AI Response • Free & Unlimited</p>
         </div>
       </div>
     </div>
