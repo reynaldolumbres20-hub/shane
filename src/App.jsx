@@ -3,107 +3,107 @@ import './App.css';
 
 function App() {
   const [userMessage, setUserMessage] = useState('');
-  const [spanishTranslation, setSpanishTranslation] = useState('');
-  const [englishTranslation, setEnglishTranslation] = useState('');
+  const [translation, setTranslation] = useState('');
   const [aiResponse, setAiResponse] = useState('');
   const [isRecording, setIsRecording] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [showTranslation, setShowTranslation] = useState(false);
+  const [error, setError] = useState('');
+  const [selectedLanguage, setSelectedLanguage] = useState('spanish'); // 'spanish' or 'english'
   
   const recognitionRef = useRef(null);
   const accumulatedTextRef = useRef('');
 
-  // DeepSeek API Key
-  const DEEPSEEK_API_KEY = "sk-2fd08f27f26c4384aba1e32dcdf6533e";
+  // GEMINI API KEY
+  const GEMINI_API_KEY = "AQ.Ab8RN6Jp0dO4qEuRTIzGvgPCJFJyu-hmCsv9-LfGUnBDIdOJH4";
 
   // ============================================
-  // DEEPSEEK TRANSLATION FUNCTION
+  // GEMINI TRANSLATION FUNCTION
   // ============================================
   
-  const translateWithDeepSeek = async (text, targetLang) => {
+  const translateWithGemini = async (text, targetLang) => {
     if (!text || text.trim() === '') return '';
     
     const languageName = targetLang === 'spanish' ? 'Spanish' : 'English';
     
     try {
-      const response = await fetch('https://api.deepseek.com/v1/chat/completions', {
+      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${DEEPSEEK_API_KEY}`
         },
         body: JSON.stringify({
-          model: 'deepseek-chat',
-          messages: [
-            {
-              role: 'system',
-              content: `You are a translator. Translate the following Tagalog text to ${languageName}. Return ONLY the translation, nothing else. No explanations.`
-            },
-            {
-              role: 'user',
-              content: `Translate this Tagalog to ${languageName}: "${text}"`
-            }
-          ],
-          max_tokens: 200,
-          temperature: 0.3
+          contents: [{
+            parts: [{
+              text: `Translate this Tagalog text to ${languageName}. Return ONLY the translation, nothing else. No explanations, no quotes. Tagalog text: "${text}"`
+            }]
+          }],
+          generationConfig: {
+            temperature: 0.3,
+            maxOutputTokens: 200
+          }
         })
       });
       
       const data = await response.json();
       
-      if (data.choices && data.choices[0] && data.choices[0].message) {
-        return data.choices[0].message.content;
+      if (data.error) {
+        console.error('Gemini Error:', data.error);
+        setError(`API Error: ${data.error.message}`);
+        return `[Error: ${text}]`;
+      }
+      
+      if (data.candidates && data.candidates[0] && data.candidates[0].content) {
+        let translation = data.candidates[0].content.parts[0].text;
+        translation = translation.replace(/^["']|["']$/g, '');
+        return translation;
       }
       
       return text;
       
     } catch (error) {
-      console.error('DeepSeek Translation Error:', error);
+      console.error('Gemini Translation Error:', error);
+      setError('Translation failed. Check API key.');
       return text;
     }
   };
 
   // ============================================
-  // DEEPSEEK AI RESPONSE FUNCTION
+  // GEMINI AI RESPONSE FUNCTION
   // ============================================
   
-  const getAIResponse = async (text, targetLang) => {
+  const getGeminiAIResponse = async (text, targetLang) => {
     const languageName = targetLang === 'spanish' ? 'Spanish' : 'English';
     
     try {
-      const response = await fetch('https://api.deepseek.com/v1/chat/completions', {
+      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${DEEPSEEK_API_KEY}`
         },
         body: JSON.stringify({
-          model: 'deepseek-chat',
-          messages: [
-            {
-              role: 'system',
-              content: `You are a friendly AI assistant. Respond ONLY in ${languageName}. Keep responses very short (1 sentence only, max 15 words). Be natural and friendly.`
-            },
-            {
-              role: 'user',
-              content: `User said in Tagalog: "${text}". Respond in ${languageName} (one short sentence):`
-            }
-          ],
-          max_tokens: 60,
-          temperature: 0.7
+          contents: [{
+            parts: [{
+              text: `You are a friendly AI assistant. Respond ONLY in ${languageName}. Keep response very short (max 15 words). Be natural and friendly. User said in Tagalog: "${text}". Respond directly:`
+            }]
+          }],
+          generationConfig: {
+            temperature: 0.7,
+            maxOutputTokens: 60
+          }
         })
       });
       
       const data = await response.json();
       
-      if (data.choices && data.choices[0] && data.choices[0].message) {
-        return data.choices[0].message.content;
+      if (data.candidates && data.candidates[0] && data.candidates[0].content) {
+        return data.candidates[0].content.parts[0].text;
       }
       
       return targetLang === 'spanish' ? '¡Hola! ¿Cómo estás?' : 'Hello! How are you?';
       
     } catch (error) {
-      console.error('AI Response Error:', error);
+      console.error('Gemini AI Error:', error);
       return targetLang === 'spanish' ? '¡Hola! ¿Cómo estás?' : 'Hello! How are you?';
     }
   };
@@ -144,10 +144,10 @@ function App() {
       return;
     }
     
+    setError('');
     accumulatedTextRef.current = '';
     setUserMessage('');
-    setSpanishTranslation('');
-    setEnglishTranslation('');
+    setTranslation('');
     setAiResponse('');
     setShowTranslation(false);
     setIsRecording(true);
@@ -176,7 +176,7 @@ function App() {
     recognition.onerror = (event) => {
       console.error('Error:', event.error);
       setIsRecording(false);
-      alert('Microphone error. Please check permissions.');
+      setError('Microphone error. Please check permissions.');
     };
     
     recognition.start();
@@ -191,6 +191,7 @@ function App() {
     
     setIsRecording(false);
     setIsProcessing(true);
+    setError('');
     
     const message = accumulatedTextRef.current.trim();
     if (!message) {
@@ -201,18 +202,21 @@ function App() {
     
     setUserMessage(message);
     
-    // Translate using DeepSeek
-    const spanish = await translateWithDeepSeek(message, 'spanish');
-    const english = await translateWithDeepSeek(message, 'english');
+    try {
+      // Translate to selected language (Spanish or English)
+      const translatedText = await translateWithGemini(message, selectedLanguage);
+      setTranslation(translatedText);
+      
+      // Get AI response in selected language
+      const ai = await getGeminiAIResponse(message, selectedLanguage);
+      setAiResponse(ai);
+      
+      setShowTranslation(true);
+    } catch (err) {
+      setError('Translation failed. Please try again.');
+      console.error(err);
+    }
     
-    setSpanishTranslation(spanish);
-    setEnglishTranslation(english);
-    
-    // Get AI response
-    const ai = await getAIResponse(message, 'spanish');
-    setAiResponse(ai);
-    
-    setShowTranslation(true);
     setIsProcessing(false);
   };
 
@@ -227,10 +231,28 @@ function App() {
             <span className="logo-icon">🎙️</span>
             <span className="logo-text">AI Voice Translator</span>
           </div>
-          <div className="badge">DEEPSEEK AI</div>
+          <div className="badge">GEMINI AI</div>
         </div>
         
-        <p className="subtitle">Magsalita ng Tagalog • DeepSeek AI Translation • Voice Output</p>
+        <p className="subtitle">Magsalita ng Tagalog • Piliin ang lengguwahe • Voice Output</p>
+        
+        {/* LANGUAGE SELECTION BUTTONS */}
+        <div className="language-selector">
+          <button 
+            className={`lang-btn ${selectedLanguage === 'spanish' ? 'active' : ''}`}
+            onClick={() => setSelectedLanguage('spanish')}
+            disabled={isRecording || isProcessing}
+          >
+            🇪🇸 SPANISH
+          </button>
+          <button 
+            className={`lang-btn ${selectedLanguage === 'english' ? 'active' : ''}`}
+            onClick={() => setSelectedLanguage('english')}
+            disabled={isRecording || isProcessing}
+          >
+            🇺🇸 ENGLISH
+          </button>
+        </div>
         
         <div className="control-group">
           <button className={`btn-start ${isRecording ? 'recording' : ''}`} onClick={startRecording} disabled={isRecording || isProcessing}>
@@ -245,11 +267,18 @@ function App() {
         {(isRecording || isProcessing) && (
           <div className="status">
             <div className="status-dot"></div>
-            <span>{isRecording ? '🔴 Nakikinig...' : '🔄 DeepSeek AI translating...'}</span>
+            <span>{isRecording ? '🔴 Nakikinig...' : '🔄 Gemini AI translating...'}</span>
+          </div>
+        )}
+        
+        {error && (
+          <div className="status" style={{ backgroundColor: 'rgba(239, 68, 68, 0.2)', color: '#ef4444' }}>
+            <span>⚠️ {error}</span>
           </div>
         )}
         
         <div className="results">
+          {/* SINABI MO BOX */}
           <div className="result-card tagalog">
             <div className="result-header">
               <span className="result-icon">🇵🇭</span>
@@ -258,35 +287,26 @@ function App() {
             <div className="result-content">{userMessage || 'Click START MIC...'}</div>
           </div>
           
+          {/* TRANSLATION BOX - DITO LALABAS ANG TRANSLATION */}
           {showTranslation && (
             <>
-              <div className="result-card spanish">
+              <div className="result-card translation">
                 <div className="result-header">
-                  <span className="result-icon">🇪🇸</span>
-                  <span>🌍 SPANISH TRANSLATION</span>
-                  <button className="mini-play" onClick={() => speakText(spanishTranslation, 'spanish')}>
-                    🔊 HEAR SPANISH
+                  <span className="result-icon">{selectedLanguage === 'spanish' ? '🇪🇸' : '🇺🇸'}</span>
+                  <span>{selectedLanguage === 'spanish' ? '🌍 SPANISH TRANSLATION' : '🌍 ENGLISH TRANSLATION'}</span>
+                  <button className="mini-play" onClick={() => speakText(translation, selectedLanguage)}>
+                    🔊 HEAR {selectedLanguage === 'spanish' ? 'SPANISH' : 'ENGLISH'}
                   </button>
                 </div>
-                <div className="result-content">{spanishTranslation}</div>
+                <div className="result-content">{translation}</div>
               </div>
               
-              <div className="result-card english">
-                <div className="result-header">
-                  <span className="result-icon">🇺🇸</span>
-                  <span>🌍 ENGLISH TRANSLATION</span>
-                  <button className="mini-play" onClick={() => speakText(englishTranslation, 'english')}>
-                    🔊 HEAR ENGLISH
-                  </button>
-                </div>
-                <div className="result-content">{englishTranslation}</div>
-              </div>
-              
+              {/* AI RESPONSE BOX */}
               <div className="result-card ai-response fade-in">
                 <div className="result-header">
                   <span className="result-icon">🤖</span>
-                  <span>AI RESPONSE (DeepSeek)</span>
-                  <button className="mini-play" onClick={() => speakText(aiResponse, 'spanish')}>
+                  <span>AI RESPONSE (Gemini)</span>
+                  <button className="mini-play" onClick={() => speakText(aiResponse, selectedLanguage)}>
                     🔊 HEAR AI
                   </button>
                 </div>
@@ -297,7 +317,7 @@ function App() {
         </div>
         
         <div className="footer">
-          <p>🎤 Powered by DeepSeek AI • Translation + AI Response • Free</p>
+          <p>🎤 Powered by Google Gemini AI • Piliin ang Spanish o English • Libre</p>
         </div>
       </div>
     </div>
