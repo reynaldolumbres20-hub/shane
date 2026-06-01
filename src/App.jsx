@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import './App.css';
 
 function App() {
@@ -15,6 +15,14 @@ function App() {
 
   // GROQ API KEY - LIBRE
   const GROQ_API_KEY = "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";
+
+  // ============================================
+  // DETECT MOBILE DEVICE
+  // ============================================
+  
+  const isMobile = () => {
+    return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+  };
 
   // ============================================
   // GROQ TRANSLATION
@@ -142,69 +150,107 @@ function App() {
   };
 
   // ============================================
-  // VOICE RECOGNITION WITH PERMISSION HANDLING
+  // VOICE RECOGNITION - MOBILE & DESKTOP COMPATIBLE
   // ============================================
   
-  const startRecording = () => {
-    if (!('webkitSpeechRecognition' in window)) {
-      alert('Please use Google Chrome browser!');
+  const startRecording = async () => {
+    // Check for Speech Recognition API support (both standard and webkit)
+    const SpeechRecognitionAPI = window.SpeechRecognition || window.webkitSpeechRecognition;
+    
+    if (!SpeechRecognitionAPI) {
+      alert('Sorry, voice recognition is not supported in this browser. Please use Chrome, Edge, or Safari.');
       return;
     }
     
-    // Request microphone permission first
-    navigator.mediaDevices.getUserMedia({ audio: true })
-      .then(() => {
+    // For mobile: request permission first
+    try {
+      setError('');
+      accumulatedTextRef.current = '';
+      setUserMessage('');
+      setTranslation('');
+      setAiResponse('');
+      
+      // Request microphone permission explicitly for mobile
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      stream.getTracks().forEach(track => track.stop()); // Stop the stream after permission is granted
+      
+      setIsRecording(true);
+      
+      const recognition = new SpeechRecognitionAPI();
+      recognition.lang = 'tl-PH';
+      recognition.continuous = true;
+      recognition.interimResults = true;
+      recognition.maxAlternatives = 1;
+      
+      let finalTranscript = '';
+      
+      recognition.onstart = () => {
+        console.log('Recognition started');
         setError('');
-        accumulatedTextRef.current = '';
-        setUserMessage('');
-        setTranslation('');
-        setAiResponse('');
-        setIsRecording(true);
-        
-        const SpeechRecognition = window.webkitSpeechRecognition;
-        const recognition = new SpeechRecognition();
-        recognition.lang = 'tl-PH';
-        recognition.continuous = true;
-        recognition.interimResults = true;
-        
-        let finalTranscript = '';
-        
-        recognition.onresult = (event) => {
-          let interimTranscript = '';
-          for (let i = event.resultIndex; i < event.results.length; i++) {
-            if (event.results[i].isFinal) {
-              finalTranscript += event.results[i][0].transcript + ' ';
-            } else {
-              interimTranscript += event.results[i][0].transcript;
-            }
-          }
-          accumulatedTextRef.current = finalTranscript + interimTranscript;
-          setUserMessage(accumulatedTextRef.current || '🎤 Speaking...');
-        };
-        
-        recognition.onerror = (event) => {
-          console.error('Error:', event.error);
-          setIsRecording(false);
-          if (event.error === 'not-allowed') {
-            setError('Microphone access denied. Please allow microphone in browser settings.');
+      };
+      
+      recognition.onresult = (event) => {
+        let interimTranscript = '';
+        for (let i = event.resultIndex; i < event.results.length; i++) {
+          if (event.results[i].isFinal) {
+            finalTranscript += event.results[i][0].transcript + ' ';
           } else {
-            setError('Microphone error. Please check permissions.');
+            interimTranscript += event.results[i][0].transcript;
           }
-        };
-        
-        recognition.start();
-        recognitionRef.current = recognition;
-      })
-      .catch((err) => {
-        console.error('Microphone permission error:', err);
-        setError('Cannot access microphone. Please allow microphone permission.');
+        }
+        accumulatedTextRef.current = finalTranscript + interimTranscript;
+        setUserMessage(accumulatedTextRef.current || '🎤 Speaking...');
+      };
+      
+      recognition.onerror = (event) => {
+        console.error('Recognition Error:', event.error);
         setIsRecording(false);
-      });
+        
+        if (event.error === 'not-allowed') {
+          setError('Microphone access denied. Please allow microphone in browser settings.');
+        } else if (event.error === 'audio-capture') {
+          setError('No microphone found. Please connect a microphone.');
+        } else if (event.error === 'network') {
+          setError('Network error. Please check your connection.');
+        } else {
+          setError(`Speech recognition error: ${event.error}`);
+        }
+      };
+      
+      recognition.onend = () => {
+        console.log('Recognition ended');
+        // Auto-process when user stops speaking on mobile
+        if (isRecording && accumulatedTextRef.current.trim()) {
+          stopAndProcess();
+        }
+      };
+      
+      recognition.start();
+      recognitionRef.current = recognition;
+      
+      // Auto-stop after 10 seconds of silence on mobile
+      if (isMobile()) {
+        setTimeout(() => {
+          if (recognitionRef.current && isRecording) {
+            recognitionRef.current.stop();
+          }
+        }, 10000);
+      }
+      
+    } catch (err) {
+      console.error('Microphone permission error:', err);
+      setError('Cannot access microphone. Please allow microphone permission for this site.');
+      setIsRecording(false);
+    }
   };
 
   const stopAndProcess = async () => {
     if (recognitionRef.current) {
-      recognitionRef.current.stop();
+      try {
+        recognitionRef.current.stop();
+      } catch (e) {
+        console.log('Recognition already stopped');
+      }
       recognitionRef.current = null;
     }
     
@@ -228,6 +274,11 @@ function App() {
       const ai = await getGroqAIResponse(message, selectedLanguage);
       setAiResponse(ai);
       
+      // Auto-speak AI response on mobile
+      if (isMobile() && ai) {
+        setTimeout(() => speakText(ai, selectedLanguage), 500);
+      }
+      
     } catch (err) {
       setError('Translation failed. Please try again.');
       console.error(err);
@@ -235,6 +286,16 @@ function App() {
     
     setIsProcessing(false);
   };
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (recognitionRef.current) {
+        recognitionRef.current.stop();
+      }
+      window.speechSynthesis.cancel();
+    };
+  }, []);
 
   return (
     <div className="App">
@@ -247,7 +308,7 @@ function App() {
             <span className="logo-icon">🎙️</span>
             <span className="logo-text">AI Voice Translator</span>
           </div>
-          <div className="badge">GROQ AI</div>
+          <div className="badge">GROQ AI • {isMobile() ? 'MOBILE READY' : 'DESKTOP'}</div>
         </div>
         
         <p className="subtitle">Magsalita ng Tagalog • Piliin ang lengguwahe • Voice Output</p>
@@ -270,11 +331,19 @@ function App() {
         </div>
         
         <div className="control-group">
-          <button className={`btn-start ${isRecording ? 'recording' : ''}`} onClick={startRecording} disabled={isRecording || isProcessing}>
+          <button 
+            className={`btn-start ${isRecording ? 'recording' : ''}`} 
+            onClick={startRecording} 
+            disabled={isRecording || isProcessing}
+          >
             🎤 {isRecording ? 'RECORDING...' : 'START MIC'}
           </button>
           
-          <button className="btn-stop" onClick={stopAndProcess} disabled={!isRecording || isProcessing}>
+          <button 
+            className="btn-stop" 
+            onClick={stopAndProcess} 
+            disabled={!isRecording || isProcessing}
+          >
             ⏹️ STOP & TRANSLATE
           </button>
         </div>
@@ -282,7 +351,7 @@ function App() {
         {(isRecording || isProcessing) && (
           <div className="status">
             <div className="status-dot"></div>
-            <span>{isRecording ? '🔴 Nakikinig...' : '🔄 Groq AI translating...'}</span>
+            <span>{isRecording ? '🔴 Nakikinig... (Magsalita ka na)' : '🔄 Groq AI translating...'}</span>
           </div>
         )}
         
@@ -326,6 +395,7 @@ function App() {
         
         <div className="footer">
           <p>🎤 Powered by Groq AI (Llama 3) • Piliin ang Spanish o English • LIBRE</p>
+          <p style={{ fontSize: '11px', marginTop: '5px' }}>📱 Compatible sa mobile at desktop • Pindutin ang START MIC at magsalita</p>
         </div>
       </div>
     </div>
