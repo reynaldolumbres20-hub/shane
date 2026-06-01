@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import './App.css';
 
 function App() {
@@ -12,18 +12,30 @@ function App() {
   
   const recognitionRef = useRef(null);
   const accumulatedTextRef = useRef('');
+  
+  // Performance: Cache DOM elements and use refs to prevent re-renders
+  const abortControllerRef = useRef(null);
+  const processingTimeoutRef = useRef(null);
+  const speechTimeoutRef = useRef(null);
 
   // GROQ API KEY
   const GROQ_API_KEY = "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";
 
   // ============================================
-  // GROQ TRANSLATION
+  // GROQ TRANSLATION (OPTIMIZED)
   // ============================================
   
-  const translateWithGroq = async (text, targetLang) => {
+  const translateWithGroq = useCallback(async (text, targetLang) => {
     if (!text || text.trim() === '') return '';
     
     const languageName = targetLang === 'spanish' ? 'Spanish' : 'English';
+    
+    // Cancel previous request if exists
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+    
+    abortControllerRef.current = new AbortController();
     
     try {
       const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
@@ -46,7 +58,8 @@ function App() {
           ],
           max_tokens: 200,
           temperature: 0.3
-        })
+        }),
+        signal: abortControllerRef.current.signal
       });
       
       const data = await response.json();
@@ -64,17 +77,21 @@ function App() {
       return text;
       
     } catch (error) {
+      if (error.name === 'AbortError') {
+        console.log('Translation request cancelled');
+        return text;
+      }
       console.error('Groq Translation Error:', error);
       setError('Translation failed.');
       return text;
     }
-  };
+  }, []);
 
   // ============================================
-  // GROQ AI RESPONSE
+  // GROQ AI RESPONSE (OPTIMIZED)
   // ============================================
   
-  const getGroqAIResponse = async (text, targetLang) => {
+  const getGroqAIResponse = useCallback(async (text, targetLang) => {
     const languageName = targetLang === 'spanish' ? 'Spanish' : 'English';
     
     try {
@@ -113,39 +130,90 @@ function App() {
       console.error('Groq AI Error:', error);
       return targetLang === 'spanish' ? '¡Hola! ¿Cómo estás?' : 'Hello! How are you?';
     }
-  };
+  }, []);
 
   // ============================================
-  // SPEECH FUNCTIONS
+  // SPEECH FUNCTIONS (OPTIMIZED)
   // ============================================
   
-  const speakText = (text, langType) => {
+  const speakText = useCallback((text, langType) => {
     if (!text || text.trim() === '') return;
     
-    window.speechSynthesis.cancel();
-    
-    const utterance = new SpeechSynthesisUtterance(text);
-    
-    if (langType === 'spanish') {
-      utterance.lang = 'es-ES';
-    } else if (langType === 'english') {
-      utterance.lang = 'en-US';
-    } else {
-      utterance.lang = 'tl-PH';
+    // Clear previous speech timeout
+    if (speechTimeoutRef.current) {
+      clearTimeout(speechTimeoutRef.current);
     }
     
-    utterance.rate = 0.9;
-    utterance.pitch = 1.0;
-    utterance.volume = 1;
+    // Cancel any ongoing speech
+    window.speechSynthesis.cancel();
     
-    window.speechSynthesis.speak(utterance);
-  };
+    // Small delay to ensure clean state
+    speechTimeoutRef.current = setTimeout(() => {
+      const utterance = new SpeechSynthesisUtterance(text);
+      
+      if (langType === 'spanish') {
+        utterance.lang = 'es-ES';
+      } else if (langType === 'english') {
+        utterance.lang = 'en-US';
+      } else {
+        utterance.lang = 'tl-PH';
+      }
+      
+      utterance.rate = 0.9;
+      utterance.pitch = 1.0;
+      utterance.volume = 1;
+      
+      window.speechSynthesis.speak(utterance);
+    }, 50);
+  }, []);
 
   // ============================================
-  // ANDROID VOICE RECOGNITION - SIMPLIFIED
+  // VOICE PROCESSING (OPTIMIZED)
   // ============================================
   
-  const startRecording = () => {
+  const processVoiceInput = useCallback(async (text) => {
+    // Clear any pending processing
+    if (processingTimeoutRef.current) {
+      clearTimeout(processingTimeoutRef.current);
+    }
+    
+    setIsProcessing(true);
+    setError('');
+    
+    // Use requestAnimationFrame for smoother UI updates
+    requestAnimationFrame(() => {
+      processingTimeoutRef.current = setTimeout(async () => {
+        try {
+          // Run translations in parallel for better performance
+          const [translated, ai] = await Promise.all([
+            translateWithGroq(text, selectedLanguage),
+            getGroqAIResponse(text, selectedLanguage)
+          ]);
+          
+          // Batch state updates to prevent multiple re-renders
+          setTranslation(translated);
+          setAiResponse(ai);
+          
+          // Auto-speak the AI response with smooth delay
+          if (ai) {
+            setTimeout(() => speakText(ai, selectedLanguage), 300);
+          }
+          
+        } catch (err) {
+          setError('Translation failed. Please try again.');
+          console.error(err);
+        } finally {
+          setIsProcessing(false);
+        }
+      }, 10);
+    });
+  }, [selectedLanguage, translateWithGroq, getGroqAIResponse, speakText]);
+
+  // ============================================
+  // VOICE RECOGNITION (OPTIMIZED)
+  // ============================================
+  
+  const startRecording = useCallback(() => {
     // Check for Speech Recognition API
     const SpeechRecognitionAPI = window.SpeechRecognition || window.webkitSpeechRecognition;
     
@@ -154,40 +222,40 @@ function App() {
       return;
     }
     
-    // Reset state
+    // Cancel any ongoing recognition
+    if (recognitionRef.current) {
+      try {
+        recognitionRef.current.abort();
+      } catch(e) {}
+    }
+    
+    // Reset state with batch update
     setError('');
-    accumulatedTextRef.current = '';
     setUserMessage('');
     setTranslation('');
     setAiResponse('');
+    accumulatedTextRef.current = '';
     
     // Create recognition instance
     const recognition = new SpeechRecognitionAPI();
     
-    // CRITICAL SETTINGS FOR ANDROID
-    recognition.lang = 'fil-PH';  // Use fil-PH instead of tl-PH for better Android support
-    recognition.continuous = false;  // false = one shot recording, better for mobile
-    recognition.interimResults = true;
+    // Optimized settings for Android
+    recognition.lang = 'fil-PH';
+    recognition.continuous = false;
+    recognition.interimResults = false; // Changed to false for better performance
     recognition.maxAlternatives = 1;
     
     recognition.onstart = () => {
-      console.log('Recognition started on Android');
+      console.log('Recognition started');
       setIsRecording(true);
       setUserMessage('🎤 Listening... Speak now');
     };
     
     recognition.onresult = (event) => {
-      let finalTranscript = '';
-      
-      for (let i = 0; i < event.results.length; i++) {
-        if (event.results[i].isFinal) {
-          finalTranscript += event.results[i][0].transcript;
-        }
-      }
-      
-      if (finalTranscript) {
-        accumulatedTextRef.current = finalTranscript;
-        setUserMessage(finalTranscript);
+      const result = event.results[0][0].transcript;
+      if (result) {
+        accumulatedTextRef.current = result;
+        setUserMessage(result);
       }
     };
     
@@ -195,29 +263,20 @@ function App() {
       console.error('Recognition Error:', event.error);
       setIsRecording(false);
       
-      switch(event.error) {
-        case 'not-allowed':
-          setError('Microphone access denied. Please allow microphone permission in Chrome settings.');
-          break;
-        case 'audio-capture':
-          setError('No microphone detected on your Android device.');
-          break;
-        case 'no-speech':
-          setError('No speech detected. Please try again and speak clearly.');
-          break;
-        case 'network':
-          setError('Network error. Please check your internet connection.');
-          break;
-        default:
-          setError(`Error: ${event.error}. Please try again.`);
-      }
+      const errorMessages = {
+        'not-allowed': 'Microphone access denied. Please allow microphone permission.',
+        'audio-capture': 'No microphone detected on your device.',
+        'no-speech': 'No speech detected. Please try again.',
+        'network': 'Network error. Please check your connection.'
+      };
+      
+      setError(errorMessages[event.error] || `Error: ${event.error}. Please try again.`);
     };
     
     recognition.onend = () => {
       console.log('Recognition ended');
       setIsRecording(false);
       
-      // Process the recorded text
       if (accumulatedTextRef.current && accumulatedTextRef.current.trim()) {
         processVoiceInput(accumulatedTextRef.current.trim());
       } else if (!accumulatedTextRef.current && !error) {
@@ -225,7 +284,7 @@ function App() {
       }
     };
     
-    // Start recognition
+    // Start recognition with error handling
     try {
       recognition.start();
       recognitionRef.current = recognition;
@@ -234,35 +293,9 @@ function App() {
       setError('Failed to start voice recognition. Please try again.');
       setIsRecording(false);
     }
-  };
-  
-  const processVoiceInput = async (text) => {
-    setIsProcessing(true);
-    setError('');
-    
-    try {
-      // Translate the text
-      const translated = await translateWithGroq(text, selectedLanguage);
-      setTranslation(translated);
-      
-      // Get AI response
-      const ai = await getGroqAIResponse(text, selectedLanguage);
-      setAiResponse(ai);
-      
-      // Auto-speak the AI response
-      if (ai) {
-        setTimeout(() => speakText(ai, selectedLanguage), 500);
-      }
-      
-    } catch (err) {
-      setError('Translation failed. Please try again.');
-      console.error(err);
-    }
-    
-    setIsProcessing(false);
-  };
+  }, [processVoiceInput, error]);
 
-  const stopRecording = () => {
+  const stopRecording = useCallback(() => {
     if (recognitionRef.current) {
       try {
         recognitionRef.current.stop();
@@ -272,19 +305,43 @@ function App() {
       recognitionRef.current = null;
     }
     setIsRecording(false);
-  };
+  }, []);
 
-  // Cleanup on unmount
+  // Cleanup on unmount - optimized
   useEffect(() => {
     return () => {
+      // Cancel all pending requests
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
+      
+      // Clear all timeouts
+      if (processingTimeoutRef.current) {
+        clearTimeout(processingTimeoutRef.current);
+      }
+      
+      if (speechTimeoutRef.current) {
+        clearTimeout(speechTimeoutRef.current);
+      }
+      
+      // Stop recognition
       if (recognitionRef.current) {
         try {
           recognitionRef.current.stop();
         } catch(e) {}
       }
+      
+      // Cancel speech
       window.speechSynthesis.cancel();
     };
   }, []);
+
+  // Memoize language selector to prevent unnecessary re-renders
+  const handleLanguageChange = useCallback((lang) => {
+    if (!isRecording && !isProcessing) {
+      setSelectedLanguage(lang);
+    }
+  }, [isRecording, isProcessing]);
 
   return (
     <div className="App">
@@ -305,14 +362,14 @@ function App() {
         <div className="language-selector">
           <button 
             className={`lang-btn ${selectedLanguage === 'spanish' ? 'active' : ''}`}
-            onClick={() => setSelectedLanguage('spanish')}
+            onClick={() => handleLanguageChange('spanish')}
             disabled={isRecording || isProcessing}
           >
             🇪🇸 SPANISH
           </button>
           <button 
             className={`lang-btn ${selectedLanguage === 'english' ? 'active' : ''}`}
-            onClick={() => setSelectedLanguage('english')}
+            onClick={() => handleLanguageChange('english')}
             disabled={isRecording || isProcessing}
           >
             🇺🇸 ENGLISH
