@@ -7,9 +7,8 @@ function App() {
   const [aiResponse, setAiResponse] = useState('');
   const [isRecording, setIsRecording] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
-  const [showTranslation, setShowTranslation] = useState(false);
   const [error, setError] = useState('');
-  const [selectedLanguage, setSelectedLanguage] = useState('spanish'); // 'spanish' or 'english'
+  const [selectedLanguage, setSelectedLanguage] = useState('spanish');
   
   const recognitionRef = useRef(null);
   const accumulatedTextRef = useRef('');
@@ -50,7 +49,7 @@ function App() {
       if (data.error) {
         console.error('Gemini Error:', data.error);
         setError(`API Error: ${data.error.message}`);
-        return `[Error: ${text}]`;
+        return `Error: ${text}`;
       }
       
       if (data.candidates && data.candidates[0] && data.candidates[0].content) {
@@ -109,12 +108,13 @@ function App() {
   };
 
   // ============================================
-  // SPEECH FUNCTIONS
+  // SPEECH FUNCTIONS - may sound button
   // ============================================
   
   const speakText = (text, langType) => {
     if (!text || text.trim() === '') return;
     
+    // Stop any ongoing speech
     window.speechSynthesis.cancel();
     
     const utterance = new SpeechSynthesisUtterance(text);
@@ -149,7 +149,6 @@ function App() {
     setUserMessage('');
     setTranslation('');
     setAiResponse('');
-    setShowTranslation(false);
     setIsRecording(true);
     
     const SpeechRecognition = window.webkitSpeechRecognition;
@@ -203,15 +202,14 @@ function App() {
     setUserMessage(message);
     
     try {
-      // Translate to selected language (Spanish or English)
+      // Translate to selected language
       const translatedText = await translateWithGemini(message, selectedLanguage);
       setTranslation(translatedText);
       
-      // Get AI response in selected language
+      // Get AI response
       const ai = await getGeminiAIResponse(message, selectedLanguage);
       setAiResponse(ai);
       
-      setShowTranslation(true);
     } catch (err) {
       setError('Translation failed. Please try again.');
       console.error(err);
@@ -278,7 +276,7 @@ function App() {
         )}
         
         <div className="results">
-          {/* SINABI MO BOX */}
+          {/* SINABI MO BOX - TAGALOG */}
           <div className="result-card tagalog">
             <div className="result-header">
               <span className="result-icon">🇵🇭</span>
@@ -287,33 +285,43 @@ function App() {
             <div className="result-content">{userMessage || 'Click START MIC...'}</div>
           </div>
           
-          {/* TRANSLATION BOX - DITO LALABAS ANG TRANSLATION */}
-          {showTranslation && (
-            <>
-              <div className="result-card translation">
-                <div className="result-header">
-                  <span className="result-icon">{selectedLanguage === 'spanish' ? '🇪🇸' : '🇺🇸'}</span>
-                  <span>{selectedLanguage === 'spanish' ? '🌍 SPANISH TRANSLATION' : '🌍 ENGLISH TRANSLATION'}</span>
-                  <button className="mini-play" onClick={() => speakText(translation, selectedLanguage)}>
-                    🔊 HEAR {selectedLanguage === 'spanish' ? 'SPANISH' : 'ENGLISH'}
-                  </button>
-                </div>
-                <div className="result-content">{translation}</div>
-              </div>
-              
-              {/* AI RESPONSE BOX */}
-              <div className="result-card ai-response fade-in">
-                <div className="result-header">
-                  <span className="result-icon">🤖</span>
-                  <span>AI RESPONSE (Gemini)</span>
-                  <button className="mini-play" onClick={() => speakText(aiResponse, selectedLanguage)}>
-                    🔊 HEAR AI
-                  </button>
-                </div>
-                <div className="result-content">{aiResponse}</div>
-              </div>
-            </>
-          )}
+          {/* TRANSLATION BOX - may SOUND BUTTON */}
+          <div className="result-card translation">
+            <div className="result-header">
+              <span className="result-icon">{selectedLanguage === 'spanish' ? '🇪🇸' : '🇺🇸'}</span>
+              <span>{selectedLanguage === 'spanish' ? '🌍 SPANISH TRANSLATION' : '🌍 ENGLISH TRANSLATION'}</span>
+              <button 
+                className="mini-play" 
+                onClick={() => speakText(translation, selectedLanguage)}
+                disabled={!translation}
+                title="Pakinggan ang translation"
+              >
+                🔊 HEAR
+              </button>
+            </div>
+            <div className="result-content">
+              {translation || (isProcessing ? '🔄 Translating...' : 'Click STOP & TRANSLATE to see translation')}
+            </div>
+          </div>
+          
+          {/* AI RESPONSE BOX - may SOUND BUTTON */}
+          <div className="result-card ai-response">
+            <div className="result-header">
+              <span className="result-icon">🤖</span>
+              <span>🤖 AI RESPONSE</span>
+              <button 
+                className="mini-play" 
+                onClick={() => speakText(aiResponse, selectedLanguage)}
+                disabled={!aiResponse}
+                title="Pakinggan ang AI response"
+              >
+                🔊 HEAR AI
+              </button>
+            </div>
+            <div className="result-content">
+              {aiResponse || (isProcessing ? '🔄 Generating response...' : 'AI response will appear here')}
+            </div>
+          </div>
         </div>
         
         <div className="footer">
