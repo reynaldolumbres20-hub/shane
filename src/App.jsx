@@ -13,11 +13,11 @@ function App() {
   const recognitionRef = useRef(null);
   const accumulatedTextRef = useRef('');
 
-  // GROQ API KEY - LIBRE (Naka-set na!)
+  // GROQ API KEY - LIBRE
   const GROQ_API_KEY = "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";
 
   // ============================================
-  // GROQ TRANSLATION - LIBRE AT GUMAGANA!
+  // GROQ TRANSLATION
   // ============================================
   
   const translateWithGroq = async (text, targetLang) => {
@@ -71,7 +71,7 @@ function App() {
   };
 
   // ============================================
-  // GROQ AI RESPONSE - LIBRE AT GUMAGANA!
+  // GROQ AI RESPONSE
   // ============================================
   
   const getGroqAIResponse = async (text, targetLang) => {
@@ -142,7 +142,7 @@ function App() {
   };
 
   // ============================================
-  // VOICE RECOGNITION
+  // VOICE RECOGNITION WITH PERMISSION HANDLING
   // ============================================
   
   const startRecording = () => {
@@ -151,42 +151,55 @@ function App() {
       return;
     }
     
-    setError('');
-    accumulatedTextRef.current = '';
-    setUserMessage('');
-    setTranslation('');
-    setAiResponse('');
-    setIsRecording(true);
-    
-    const SpeechRecognition = window.webkitSpeechRecognition;
-    const recognition = new SpeechRecognition();
-    recognition.lang = 'tl-PH';
-    recognition.continuous = true;
-    recognition.interimResults = true;
-    
-    let finalTranscript = '';
-    
-    recognition.onresult = (event) => {
-      let interimTranscript = '';
-      for (let i = event.resultIndex; i < event.results.length; i++) {
-        if (event.results[i].isFinal) {
-          finalTranscript += event.results[i][0].transcript + ' ';
-        } else {
-          interimTranscript += event.results[i][0].transcript;
-        }
-      }
-      accumulatedTextRef.current = finalTranscript + interimTranscript;
-      setUserMessage(accumulatedTextRef.current || '🎤 Speaking...');
-    };
-    
-    recognition.onerror = (event) => {
-      console.error('Error:', event.error);
-      setIsRecording(false);
-      setError('Microphone error. Please check permissions.');
-    };
-    
-    recognition.start();
-    recognitionRef.current = recognition;
+    // Request microphone permission first
+    navigator.mediaDevices.getUserMedia({ audio: true })
+      .then(() => {
+        setError('');
+        accumulatedTextRef.current = '';
+        setUserMessage('');
+        setTranslation('');
+        setAiResponse('');
+        setIsRecording(true);
+        
+        const SpeechRecognition = window.webkitSpeechRecognition;
+        const recognition = new SpeechRecognition();
+        recognition.lang = 'tl-PH';
+        recognition.continuous = true;
+        recognition.interimResults = true;
+        
+        let finalTranscript = '';
+        
+        recognition.onresult = (event) => {
+          let interimTranscript = '';
+          for (let i = event.resultIndex; i < event.results.length; i++) {
+            if (event.results[i].isFinal) {
+              finalTranscript += event.results[i][0].transcript + ' ';
+            } else {
+              interimTranscript += event.results[i][0].transcript;
+            }
+          }
+          accumulatedTextRef.current = finalTranscript + interimTranscript;
+          setUserMessage(accumulatedTextRef.current || '🎤 Speaking...');
+        };
+        
+        recognition.onerror = (event) => {
+          console.error('Error:', event.error);
+          setIsRecording(false);
+          if (event.error === 'not-allowed') {
+            setError('Microphone access denied. Please allow microphone in browser settings.');
+          } else {
+            setError('Microphone error. Please check permissions.');
+          }
+        };
+        
+        recognition.start();
+        recognitionRef.current = recognition;
+      })
+      .catch((err) => {
+        console.error('Microphone permission error:', err);
+        setError('Cannot access microphone. Please allow microphone permission.');
+        setIsRecording(false);
+      });
   };
 
   const stopAndProcess = async () => {
@@ -234,7 +247,7 @@ function App() {
             <span className="logo-icon">🎙️</span>
             <span className="logo-text">AI Voice Translator</span>
           </div>
-          <div className="badge"></div>
+          <div className="badge">GROQ AI</div>
         </div>
         
         <p className="subtitle">Magsalita ng Tagalog • Piliin ang lengguwahe • Voice Output</p>
