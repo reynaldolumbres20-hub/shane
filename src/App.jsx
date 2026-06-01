@@ -13,31 +13,31 @@ function App() {
   const recognitionRef = useRef(null);
   const accumulatedTextRef = useRef('');
 
-  // DEEPSEEK API KEY - NAKA-LAGAY NA!
-  const DEEPSEEK_API_KEY = "sk-930e4ef4ba704b619c7ad25e514c5513";
+  // GROQ API KEY - LIBRE (Naka-set na!)
+  const GROQ_API_KEY = "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";
 
   // ============================================
-  // DEEPSEEK TRANSLATION
+  // GROQ TRANSLATION - LIBRE AT GUMAGANA!
   // ============================================
   
-  const translateWithDeepSeek = async (text, targetLang) => {
+  const translateWithGroq = async (text, targetLang) => {
     if (!text || text.trim() === '') return '';
     
     const languageName = targetLang === 'spanish' ? 'Spanish' : 'English';
     
     try {
-      const response = await fetch('https://api.deepseek.com/v1/chat/completions', {
+      const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${DEEPSEEK_API_KEY}`
+          'Authorization': `Bearer ${GROQ_API_KEY}`
         },
         body: JSON.stringify({
-          model: 'deepseek-chat',
+          model: 'llama-3.3-70b-versatile',
           messages: [
             {
               role: 'system',
-              content: `You are a translator. Translate the following Tagalog text to ${languageName}. Return ONLY the translation, nothing else. No explanations.`
+              content: `You are a translator. Translate Tagalog to ${languageName}. Return ONLY the translation, no explanations.`
             },
             {
               role: 'user',
@@ -52,7 +52,7 @@ function App() {
       const data = await response.json();
       
       if (data.error) {
-        console.error('DeepSeek Error:', data.error);
+        console.error('Groq Error:', data.error);
         setError(`API Error: ${data.error.message}`);
         return text;
       }
@@ -64,28 +64,28 @@ function App() {
       return text;
       
     } catch (error) {
-      console.error('DeepSeek Translation Error:', error);
-      setError('Translation failed. Check API key.');
+      console.error('Groq Translation Error:', error);
+      setError('Translation failed.');
       return text;
     }
   };
 
   // ============================================
-  // DEEPSEEK AI RESPONSE
+  // GROQ AI RESPONSE - LIBRE AT GUMAGANA!
   // ============================================
   
-  const getDeepSeekAIResponse = async (text, targetLang) => {
+  const getGroqAIResponse = async (text, targetLang) => {
     const languageName = targetLang === 'spanish' ? 'Spanish' : 'English';
     
     try {
-      const response = await fetch('https://api.deepseek.com/v1/chat/completions', {
+      const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${DEEPSEEK_API_KEY}`
+          'Authorization': `Bearer ${GROQ_API_KEY}`
         },
         body: JSON.stringify({
-          model: 'deepseek-chat',
+          model: 'llama-3.3-70b-versatile',
           messages: [
             {
               role: 'system',
@@ -110,7 +110,7 @@ function App() {
       return targetLang === 'spanish' ? '¡Hola! ¿Cómo estás?' : 'Hello! How are you?';
       
     } catch (error) {
-      console.error('DeepSeek AI Error:', error);
+      console.error('Groq AI Error:', error);
       return targetLang === 'spanish' ? '¡Hola! ¿Cómo estás?' : 'Hello! How are you?';
     }
   };
@@ -209,10 +209,10 @@ function App() {
     setUserMessage(message);
     
     try {
-      const translated = await translateWithDeepSeek(message, selectedLanguage);
+      const translated = await translateWithGroq(message, selectedLanguage);
       setTranslation(translated);
       
-      const ai = await getDeepSeekAIResponse(message, selectedLanguage);
+      const ai = await getGroqAIResponse(message, selectedLanguage);
       setAiResponse(ai);
       
     } catch (err) {
@@ -234,7 +234,7 @@ function App() {
             <span className="logo-icon">🎙️</span>
             <span className="logo-text">AI Voice Translator</span>
           </div>
-          <div className="badge">DEEPSEEK AI</div>
+          <div className="badge">GROQ AI (LIBRE)</div>
         </div>
         
         <p className="subtitle">Magsalita ng Tagalog • Piliin ang lengguwahe • Voice Output</p>
@@ -269,7 +269,7 @@ function App() {
         {(isRecording || isProcessing) && (
           <div className="status">
             <div className="status-dot"></div>
-            <span>{isRecording ? '🔴 Nakikinig...' : '🔄 DeepSeek AI translating...'}</span>
+            <span>{isRecording ? '🔴 Nakikinig...' : '🔄 Groq AI translating...'}</span>
           </div>
         )}
         
@@ -312,7 +312,7 @@ function App() {
         </div>
         
         <div className="footer">
-          <p>🎤 Powered by DeepSeek AI • Piliin ang Spanish o English • Libre</p>
+          <p>🎤 Powered by Groq AI (Llama 3) • Piliin ang Spanish o English • LIBRE</p>
         </div>
       </div>
     </div>
