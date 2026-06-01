@@ -234,7 +234,7 @@ function App() {
             <span className="logo-icon">🎙️</span>
             <span className="logo-text">AI Voice Translator</span>
           </div>
-          <div className="badge">GROQ AI (LIBRE)</div>
+          <div className="badge"></div>
         </div>
         
         <p className="subtitle">Magsalita ng Tagalog • Piliin ang lengguwahe • Voice Output</p>
